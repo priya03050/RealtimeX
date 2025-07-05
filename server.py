@@ -4,6 +4,7 @@ import select
 from requestHandler import handle_request
 
 from requestHandler import handle_request
+import websocketFrame
 TCP_IP = '127.0.0.1'
 TCP_PORT = 5006
 BUFFER_SIZE = 1024 * 1024
@@ -64,11 +65,33 @@ def handle_new_connection(main_door_socket, input_sockets):
 def handle_websocket_message(client_socket, input_sockets,ws_sockets):
     data_in_bytes = client_socket.recv(BUFFER_SIZE)
 
-    websocket_frame = parse.WebsocketFrame()
+    websocket_frame = websocketFrame.WebsocketFrame()
     websocket_frame.populateFromWebsocketFrameMessage(data_in_bytes)
 
-    print('Received message:', websocket_frame.get_payload_data().decode('utf-8'))
+    payload = websocket_frame.get_payload_data()
+
+    try:
+        decoded_msg = payload.decode('utf-8')
+        print('Received message:', decoded_msg)
+    except UnicodeDecodeError:
+        print('Received binary or invalid message.')
+        return
+
+    # Construct WebSocket text frame to broadcast (simple, no masking)
+    frame = b'\x81' + bytes([len(payload)]) + payload
+
+    broadcast_message(client_socket, ws_sockets, frame)
     return      
+
+def broadcast_message(sender_socket, ws_sockets, message_bytes):
+    for ws_sock in ws_sockets:
+        if ws_sock != sender_socket:
+            try:
+                ws_sock.sendall(message_bytes)
+            except Exception as e:
+                print(f"Failed to send to socket {ws_sock.fileno()}: {e}")
+                # close_socket(ws_sock, input_sockets=[], ws_sockets=ws_sockets)
+
 
 if __name__ == '__main__':
     main()     

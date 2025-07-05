@@ -51,6 +51,8 @@ def handle_request(client_socket, input_sockets, ws_sockets):
         else:
             # Invalid WS request.
             print('debug 2')
+            broadcast_message = f"[Client {client_socket.fileno()}] {message}".encode('utf-8')
+            broadcast_to_others(client_socket, input_sockets, broadcast_message)
             client_socket.send(b'HTTP/1.1 400 Bad Request')
             close_socket(client_socket, input_sockets, ws_sockets)
             return
@@ -100,5 +102,16 @@ def parse_request(request):
           [header, value] = header_entry.split(': ')
           headers_map[header.lower()] = value
      return (method, target, http_version, headers_map)
+
+def broadcast_to_others(sender_socket, all_sockets, message):
+    for sock in all_sockets:
+        if sock != sender_socket and sock != all_sockets[0]:
+            try:
+                sock.sendall(message)
+            except:
+                # If send fails, remove the socket
+                print(f"Failed to send to {sock.fileno()}, removing.")
+                all_sockets.remove(sock)
+                sock.close()
 
 
